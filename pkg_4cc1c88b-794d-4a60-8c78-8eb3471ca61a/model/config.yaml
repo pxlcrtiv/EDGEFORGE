@@ -1,0 +1,6 @@
+# Runtime configuration
+{
+  "hardware": "jetson-nano",
+  "precision": "INT8",
+  "security": "IL4"
+}

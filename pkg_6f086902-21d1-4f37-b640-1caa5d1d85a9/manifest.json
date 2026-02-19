@@ -1,0 +1,14 @@
+{
+  "package_id": "6f086902-21d1-4f37-b640-1caa5d1d85a9",
+  "created": "2025-02-20",
+  "classification": "IL5",
+  "model_metadata": {
+    "engine_file": "model.engine",
+    "target_hardware": "jetson",
+    "precision_mode": "INT8"
+  },
+  "audit_chain_hash": "h1",
+  "verification": {
+    "checksum_algorithm": "SHA-256"
+  }
+}

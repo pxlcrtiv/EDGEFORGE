@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edgeforge"
+version = "0.1.0"
+description = "Military-grade edge AI model optimization and deployment suite"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch",
+    "onnx",
+    "networkx",
+    "numpy",
+    "pycuda",
+    "cryptography",
+    "PyYAML",
+    "docker",
+    "click"
+]
+
+[project.scripts]
+edgeforge = "edgeforge.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["edgeforge*"]

@@ -1,0 +1,14 @@
+{
+  "package_id": "4cc1c88b-794d-4a60-8c78-8eb3471ca61a",
+  "created": "2026-02-19T19:58:40Z",
+  "classification": "IL4",
+  "model_metadata": {
+    "engine_file": "cli_model_quant.engine",
+    "target_hardware": "jetson-nano",
+    "precision_mode": "INT8"
+  },
+  "audit_chain_hash": "64c569b5a4bd21cc4053a2baea191f05627309175473559bb4a7d7357801fea0",
+  "verification": {
+    "checksum_algorithm": "SHA-256"
+  }
+}

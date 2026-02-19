@@ -1,0 +1,34 @@
+name: edgeforge_deploy
+version: "1.0"
+description: Secure package deployment workflow
+
+inputs:
+  package_path:
+    type: file
+    required: true
+    description: Path to deployment package (.tar.gz)
+  target_host:
+    type: string
+    required: false
+    description: Hostname or IP of target tactical hardware
+
+steps:
+  - name: verify_package
+    action: edgeforge.cli.commands.verify.verify
+    inputs:
+      package: ${inputs.package_path}
+    outputs:
+      verification_status: ${outputs.status}
+  
+  - name: transfer_package
+    action: edgeforge.cli.commands.deploy.transfer
+    inputs:
+      package: ${inputs.package_path}
+      host: ${inputs.target_host}
+    outputs:
+      transfer_status: ${outputs.status}
+
+outputs:
+  deployment_status:
+    type: string
+    description: Final status of the deployment operation

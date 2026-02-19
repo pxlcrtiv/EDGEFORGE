@@ -1,0 +1,84 @@
+name: edgeforge_optimize
+version: "1.0"
+description: Complete model optimization and packaging workflow
+
+inputs:
+  model_path:
+    type: file
+    required: true
+    description: Path to input model
+  target_hardware:
+    type: string
+    required: true
+    enum: [jetson-nano, jetson-xavier, jetson-orin, xilinx-zynq]
+  precision:
+    type: string
+    default: INT8
+    enum: [FP16, INT8, INT4]
+  security_level:
+    type: string
+    default: IL4
+    enum: [IL4, IL5, IL6]
+
+steps:
+  - name: validate_input
+    action: edgeforge.core.validator.validate_model
+    inputs:
+      model_path: ${inputs.model_path}
+    outputs:
+      validation_report: ${outputs.report}
+  
+  - name: detect_architecture
+    action: edgeforge.core.arch_detector.detect_architecture
+    inputs:
+      model_path: ${inputs.model_path}
+    outputs:
+      arch_profile: ${outputs.profile}
+  
+  - name: quantize_model
+    action: edgeforge.quantization.adaptive_quant.adaptive_quantize
+    inputs:
+      model_path: ${inputs.model_path}
+      arch_profile: ${steps.detect_architecture.arch_profile}
+      precision: ${inputs.precision}
+    outputs:
+      quantized_model: ${outputs.model}
+      quantization_plan: ${outputs.plan}
+  
+  - name: optimize_hardware
+    action: edgeforge.hardware.optimizer_factory.optimize_for_hardware
+    inputs:
+      model: ${steps.quantize_model.quantized_model}
+      target: ${inputs.target_hardware}
+      config:
+        precision: ${inputs.precision}
+    outputs:
+      optimized_engine: ${outputs.engine}
+  
+  - name: generate_audit_log
+    action: edgeforge.security.audit_logger.AuditLogger
+    inputs:
+      session_id: "IFLOW_SESSION"
+      classification: ${inputs.security_level}
+    outputs:
+      audit_log: ${outputs.log}
+  
+  - name: package_deployment
+    action: edgeforge.packaging.air_gap_packager.create_air_gap_package
+    inputs:
+      engine: ${steps.optimize_hardware.optimized_engine}
+      audit_log: ${steps.generate_audit_log.audit_log}
+      target_config:
+        hardware: ${inputs.target_hardware}
+        precision: ${inputs.precision}
+        security: ${inputs.security_level}
+    outputs:
+      package: ${outputs.package_path}
+
+outputs:
+  package_path:
+    type: file
+    description: Final deployment package
+  audit_hash:
+    type: string
+    description: Cryptographic hash of audit trail

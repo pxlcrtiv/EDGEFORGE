@@ -1,0 +1,6 @@
+# Runtime configuration
+{
+  "hardware": "xilinx-zynq",
+  "precision": "INT8",
+  "security": "IL4"
+}

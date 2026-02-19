@@ -1,0 +1,14 @@
+{
+  "package_id": "755003a8-90e6-4001-b40f-f911b146e5bf",
+  "created": "2026-02-19T19:52:59Z",
+  "classification": "IL4",
+  "model_metadata": {
+    "engine_file": "test_model_quant.xmodel",
+    "target_hardware": "xilinx-zynq",
+    "precision_mode": "INT8"
+  },
+  "audit_chain_hash": "7eb03235ee55e454b3f36750131e10d07d13eb4767c1e5a4a02fe18b67557949",
+  "verification": {
+    "checksum_algorithm": "SHA-256"
+  }
+}
