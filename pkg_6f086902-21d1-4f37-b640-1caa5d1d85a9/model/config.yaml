@@ -1,5 +1,0 @@
-# Runtime configuration
-{
-  "hardware": "jetson",
-  "precision": "INT8"
-}
