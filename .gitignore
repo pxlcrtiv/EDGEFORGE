@@ -20,3 +20,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+# Test / packager residue: pkg_<uuid>/ dirs the air-gap packager
+# creates in cwd. Ticket 4 of the architecture review will harden
+# the packager to clean these up; in the meantime, ignore them.
+pkg_*/

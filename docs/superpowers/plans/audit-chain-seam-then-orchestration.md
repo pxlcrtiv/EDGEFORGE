@@ -157,3 +157,45 @@ T2.4  Rewrite iflow/optimize.yaml
 ```
 
 Ticket 2 does not start until Ticket 1 is on `main`.
+
+---
+
+## Implementation log — Ticket 1
+
+Completed 2026-07-20.
+
+### What landed
+
+- **`edgeforge/security/audit_logger.py`** — new typed seam.
+  - `HashableArtifact` marker base.
+  - Three subclasses: `PathRef` (disk file, streamed SHA-256), `RawBytes` (in-memory), `HashedSha256` (already-hashed).
+  - `log_transformation` rejects plain strings at the seam with a `TypeError` explaining the right call.
+  - The audit logger owns file hashing end-to-end; callers do not import `hashlib`.
+  - `verify_audit_integrity(audit_package, input_artifact_map=None)` — when the optional artifact map is supplied, each declared PathRef is re-read from disk and re-hashed. Tampering returns `ARTIFACT_TAMPERING_DETECTED_AT_SEQUENCE_<i>_<name>`.
+
+- **`edgeforge/tests/unit/test_audit_seam.py`** (new) — six tests covering:
+  1. plain strings are rejected at the seam,
+  2. `PathRef` is streamed and recorded as a 64-hex SHA-256 (not a path),
+  3. `RawBytes` are hashed in memory,
+  4. `HashedSha256` is pass-through (caller responsibility),
+  5. verify passes intact when artifact map matches,
+  6. verify detects engine-file tampering via re-read.
+
+- **`edgeforge/tests/unit/test_audit_logger.py`** — migrated to use `HashedSha256(...)` at the seam. The original chaining, tampering-of-entry, and chain-break tests still pass; only the input/output types tightened.
+
+- **`edgeforge/cli/commands/optimize.py`** — passes `PathRef` to the audit seam. Collapsed the audit invocation to a single post-engine step (`optimize_to_engine`) because the old pair of audit entries (one quant step whose reported output path is a phantom under the current quantizer) could no longer chain honestly. This is reshaped properly in Ticket 2.
+
+- **`edgeforge/cli/commands/verify.py`** — extracts the package to a tmpdir, builds an artifact map from `model/` re-staged files, and feeds both into `verify_audit_integrity`. The CLI integration test now exercises the seam-to-seam round-trip.
+
+- **`edgeforge/tests/integration/test_pipeline.py`** — migrated to `HashedSha256(...)`.
+
+- **`.gitignore`** — adds `pkg_*/` to suppress air-gap packager cwd-leak residue.
+
+### Known gap carried into Ticket 2
+
+The quantizer step still logs no audit entry (collapsed under T1 to "post-engine only"). Ticket 2's pipeline module will log each stage as its artifact materializes, restoring a per-stage chain entry whose hash values describe real disk content.
+
+### Status
+
+- Tests: **18 passed** (was 12), 80% line coverage (was 79%).
+- The audit chain now chains real artifact hashes — the architecture review's headline finding is closed.
