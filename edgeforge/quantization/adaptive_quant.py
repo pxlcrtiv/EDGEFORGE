@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional
+import shutil
 from edgeforge.core.arch_detector import detect_architecture
 
 def calculate_layer_sensitivity(layer_name: str, calibration_data: Optional[Any]) -> float:
@@ -8,10 +9,17 @@ def calculate_layer_sensitivity(layer_name: str, calibration_data: Optional[Any]
     return 0.5
 
 def apply_quantization_plan(model_path: str, plan: Dict[str, Any]) -> str:
-    """Applies the quantization plan to the model and returns path to quantized model."""
-    # This would involve using onnxruntime.quantization or similar
+    """Applies the quantization plan to the model and returns path to quantized model.
+
+    Real quantization uses onnxruntime.quantization or similar. For this
+    seam, the adapter must produce a materialised artifact at the
+    returned path; downstream stages (audit, engine) read from disk.
+    Today's adapter copies the model into the quant path so the file
+    exists. The upstream module is responsible for replacing this with
+    a real quantizer (architecture review Candidate 2).
+    """
     quant_model_path = model_path.replace(".onnx", "_quant.onnx")
-    print(f"Applying quantization plan to {model_path} -> {quant_model_path}")
+    shutil.copyfile(model_path, quant_model_path)
     return quant_model_path
 
 def restore_high_precision_layers(quantized_model_path: str, top_k: int = 5) -> str:
