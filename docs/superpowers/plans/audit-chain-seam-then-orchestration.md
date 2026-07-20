@@ -199,3 +199,37 @@ The quantizer step still logs no audit entry (collapsed under T1 to "post-engine
 
 - Tests: **18 passed** (was 12), 80% line coverage (was 79%).
 - The audit chain now chains real artifact hashes — the architecture review's headline finding is closed.
+
+---
+
+## Implementation log — Ticket 2
+
+Completed 2026-07-20.
+
+### What landed
+
+- **`edgeforge/pipeline.py`** (new). One module owns the sequence:
+  `OptimizationRequest` → `OptimizationPipeline.run()` → `ArtifactBundle`.
+  - `OptimizationRequest` is a frozen dataclass with default uuid4 session id; path fields are coerced to `Path`.
+  - `ArtifactBundle` is a frozen dataclass with `session_id`, `package_path`, `audit_hash`.
+  - `OptimizationPipeline.run()` validates, detects, quantizes, optimizes, audits, packages — in that order. Each stage's audit entry is logged as soon as the artifact materializes on disk. The audit chain sees real hashes.
+
+- **`edgeforge/cli/commands/optimize.py`** rewritten. From 76 non-blank lines to **22**. Imports `OptimizationPipeline` and delegates. The Click decorator remains for arg parsing and `click.echo` for output — that's it.
+
+- **`edgeforge/quantization/adaptive_quant.py`** — minimal adapter fix. `apply_quantization_plan` now copies the model bytes to the reported path so the file is real. The upstream module remains a "real quant later" stub but the seam now produces a materialised artifact.
+
+- **`edgeforge/workflows/iflow/optimize.yaml`** — rewritten to be a faithful description of `OptimizationPipeline.run`. Single step mapping to `edgeforge.pipeline.OptimizationPipeline.run`. The legacy "SESSION_123" / "IFLOW_SESSION" constant is gone; `session_id` is an optional input propagated to the audit chain. All seven of the keys that disagreed with the code (per the architecture review) are gone.
+
+- **`edgeforge/tests/unit/test_pipeline.py`** (new). 7 tests covering:
+  1. default session id is a uuid4,
+  2. session id is injectable,
+  3. `OptimizationPipeline.run` returns an `ArtifactBundle`,
+  4. the bundle's session id matches the audit log header, and the audit hash matches the chain's final hash,
+  5. no constant "SESSION_123" remains,
+  6. CLI is under 35 non-blank lines,
+  7. the quantizer's reported path contains a real file.
+
+### Status
+
+- Tests: **25 passed** (was 18), 84% line coverage (was 80%).
+- The CLI is now a thin shell. The pipeline owns the orchestration. The audit chain per-stage entries describe real artefacts on disk.
