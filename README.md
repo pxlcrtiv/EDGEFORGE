@@ -4,7 +4,7 @@ Military-grade edge AI model optimization and deployment suite.
 
 `edgeforge` takes a validated ONNX model, detects its architecture family, quantizes it for a target precision, ships it through an air-gap package, and produces a tamper-evident audit log of every transformation.
 
-> Status: **milestones 1–4 complete** (engine, security, multi-hardware, workflows, test suite). The architecture review dated 2026-07-20 ([`docs/superpowers/plans/audit-chain-seam-then-orchestration.md`](docs/superpowers/plans/audit-chain-seam-then-orchestration.md)) found the audit chain and the CLI orchestrator are the two shallowest modules and should be deepened first.
+> Status: **milestones 1–4 complete** (engine, security, multi-hardware, workflows, test suite).
 
 ## Quickstart
 
@@ -100,18 +100,6 @@ edgeforge/
 generate_mock_model.py    # CLI helper to write a fake ONNX model
 pyproject.toml            # build config + entry point
 ```
-
-## Architecture review (2026-07-20)
-
-A full review surfaced five deepening opportunities ranked by recommendation strength:
-
-1. **Strong** — Collapse the audit-chain seam.
-2. **Strong** — Pull orchestration out of the Click decorator.
-3. **Worth exploring** — Deepen the quantization module.
-4. **Worth exploring** — Split the air-gap packager.
-5. **Speculative** — Consolidate the ONNX test fixture.
-
-Top two are sequenced in [`docs/superpowers/plans/audit-chain-seam-then-orchestration.md`](docs/superpowers/plans/audit-chain-seam-then-orchestration.md).
 
 ## Conventions
 
