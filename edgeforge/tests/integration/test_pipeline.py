@@ -34,20 +34,28 @@ def test_full_pipeline_integration(tmp_path):
     opt = optimize_for_hardware(quant['quantized_model_path'], "jetson-nano", {"precision": "INT8"})
     
     # 4. Audit & Package
+    from edgeforge.security.audit_logger import HashedSha256, verify_audit_integrity
+    import hashlib
+    fake_in = hashlib.sha256(b"h1").hexdigest()
+    fake_out = hashlib.sha256(b"h2").hexdigest()
     logger = AuditLogger("INTEG_SESSION")
-    logger.log_transformation("integ_op", {"in": "h1"}, {"out": "h2"}, {})
+    logger.log_transformation(
+        "integ_op",
+        {"in": HashedSha256(fake_in)},
+        {"out": HashedSha256(fake_out)},
+        {},
+    )
     package = create_air_gap_package(opt['engine_path'], logger.finalize_audit_log(), {"hardware": "jetson-nano", "precision": "INT8"})
-    
+
     assert os.path.exists(package['package_path'])
-    
+
     # Integrity check on package
-    from edgeforge.security.audit_logger import verify_audit_integrity
     import tarfile, json
     with tarfile.open(package['package_path'], "r:gz") as tar:
         audit_data = json.load(tar.extractfile("security/audit_log.json"))
         verify_result = verify_audit_integrity(audit_data)
         assert verify_result['valid'] is True
-    
+
     os.remove(package['package_path'])
     if os.path.exists(quant['quantized_model_path']):
         os.remove(quant['quantized_model_path'])

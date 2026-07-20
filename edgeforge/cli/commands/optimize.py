@@ -1,9 +1,23 @@
 import click
 import os
+from pathlib import Path
 from edgeforge.core.validator import validate_model, validate_target
 from edgeforge.core.arch_detector import detect_architecture
 from edgeforge.quantization.adaptive_quant import adaptive_quantize
 from edgeforge.hardware.tensorrt_optimizer import TensorRTOptimizer
+from edgeforge.security.audit_logger import PathRef, HashableArtifact
+
+
+def _hash_artifact(path_str: str) -> HashableArtifact:
+    """Wrap an in-pipeline path-string as a PathRef for the audit seam.
+
+    Other pipeline stages return paths as strings; the audit seam
+    requires a typed HashableArtifact. This helper is the one
+    bridge. After the pipeline is extracted to its own module
+    (Ticket 2) the helper disappears with the orchestration.
+    """
+    return PathRef(path_str)
+
 
 @click.command()
 @click.option("--model", required=True, help="Path to input model (.pt, .onnx)")
@@ -38,18 +52,30 @@ def optimize(model, target, precision, calibration_data, security_level, output)
     quant_result = adaptive_quantize(model, calibration_data, precision)
     click.echo(f"[*] Quantization complete. Final accuracy estimate: {quant_result['final_accuracy']}")
 
-    from edgeforge.security.audit_logger import AuditLogger
+    from edgeforge.security.audit_logger import AuditLogger, HashedSha256
     audit = AuditLogger(session_id="SESSION_123", classification=security_level)
-    audit.log_transformation("quantization", {"input": model}, {"output": quant_result['quantized_model_path']}, {"precision": precision})
 
     click.echo(f"[*] Optimizing for target {target}...")
     try:
         opt_result = optimize_for_hardware(quant_result['quantized_model_path'], target, {'precision': precision})
         click.echo(f"[*] Hardware optimization complete: {opt_result['engine_path']}")
-        audit.log_transformation("hardware_optimization", {"input": quant_result['quantized_model_path']}, {"output": opt_result['engine_path']}, {"target": target})
     except Exception as e:
         click.echo(f"[!] Hardware optimization failed: {str(e)}")
         return
+
+    # One audit entry, post-engine, with both real artifacts. The
+    # earlier audit pairs (quant step / hardware step) under the old
+    # seam were partly fictitious: the quantizer reported a path it
+    # never wrote. The new seam refuses to chain a phantom file, so
+    # we collapse to a single honest entry once the engine exists.
+    # Ticket 2 will move this into a proper pipeline where every
+    # stage logs its own artifact as it materializes.
+    audit.log_transformation(
+        "optimize_to_engine",
+        {"model": PathRef(model), "engine": PathRef(opt_result["engine_path"])},
+        {},
+        {"precision": precision, "target": target},
+    )
 
     click.echo(f"[*] Generating IL5 air-gap deployment package...")
     from edgeforge.packaging.air_gap_packager import create_air_gap_package
