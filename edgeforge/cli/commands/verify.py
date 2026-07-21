@@ -6,6 +6,12 @@ import tempfile
 from pathlib import Path
 from edgeforge.security.audit_logger import verify_audit_integrity, PathRef
 
+# Re-read artifacts only when the manifest authoritatively declares
+# their PathRef locations. Plain chain verification runs otherwise.
+# Avoids the silent-stem-collision bug a name-guess heuristic would
+# introduce.
+
+
 @click.command()
 @click.option("--package", required=True, help="Path to deployment package")
 def verify(package):
@@ -17,49 +23,50 @@ def verify(package):
         return
 
     try:
-        with tempfile.TemporaryDirectory() as extract_dir:
-            with tarfile.open(package, "r:gz") as tar:
-                # Extract manifest and audit log to a temp dir so we
-                # can pin files onto disk for re-hashing.
-                tar.extract("manifest.json", extract_dir, filter="data")
-                tar.extract("security/audit_log.json", extract_dir, filter="data")
+        with tarfile.open(package, "r:gz") as tar:
+            manifest_file = tar.extractfile("manifest.json")
+            if not manifest_file:
+                click.echo("[!] manifest.json missing from package")
+                return
+            manifest = json.load(manifest_file)
 
-            manifest_file = Path(extract_dir) / "manifest.json"
-            audit_file = Path(extract_dir) / "security" / "audit_log.json"
-            with open(manifest_file) as f:
-                manifest = json.load(f)
-            with open(audit_file) as f:
-                audit_log = json.load(f)
+            audit_file = tar.extractfile("security/audit_log.json")
+            if not audit_file:
+                click.echo("[!] security/audit_log.json missing from package")
+                return
+            audit_log = json.load(audit_file)
 
             click.echo(f"[*] Package ID: {manifest['package_id']}")
             click.echo(f"[*] Classification: {manifest['classification']}")
             click.echo(f"[*] Verifying cryptographic audit chain...")
 
-            # Build an artifact map from any in-tree files the package
-            # re-stages. For each entry that recorded a PathRef,
-            # re-hash the corresponding file under the extracted
-            # model/ subtree to catch tampering.
-            artifact_map = {}
-            with tarfile.open(package, "r:gz") as tar:
-                tar.extractall(extract_dir, filter="data")
-            for i in range(len(audit_log["entries"])):
-                artifact_map[i] = {}
-            # Map every PathRef in the package layout: model.files.
-            model_dir = Path(extract_dir) / "model"
-            if model_dir.exists():
-                # Index each entry's declared PathRef name against the
-                # file at that path inside model/.
-                for i, entry in enumerate(audit_log["entries"]):
-                    for name in entry.get("input_hashes", {}).keys():
-                        # heuristic: try matching by filename
-                        for cand in model_dir.iterdir():
-                            if cand.is_file() and cand.stem == name:
-                                artifact_map[i][name] = PathRef(cand)
+            # Chain-only verification: the chain was the audit log's
+            # invariant. Re-reading disk artifacts is opt-in via the
+            # manifest's declared artifact_paths table; if that's
+            # absent (today's packager doesn't yet emit it), we
+            # cannot authoritatively bind filenames to PathRefs.
+            artifact_map = None
+            declared = manifest.get("artifact_paths")
+            if declared:
+                artifact_map = {}
+                with tempfile.TemporaryDirectory() as extract_dir:
+                    tar.extractall(extract_dir, filter="data")
+                for entry_idx, paths in declared.items():
+                    artifact_map[int(entry_idx)] = {
+                        name: PathRef(Path(extract_dir) / p)
+                        for name, p in paths.items()
+                    }
 
-            v_result = verify_audit_integrity(audit_log, artifact_map or None)
-            if v_result['valid']:
-                click.echo(f"[+] Audit integrity verified. {v_result['operations_verified']} operations confirmed.")
-                click.echo(f"[+] Final Chain Hash: {audit_log['header']['final_chain_hash']}")
+            v_result = verify_audit_integrity(audit_log, artifact_map)
+            if v_result["valid"]:
+                click.echo(
+                    f"[+] Audit integrity verified. "
+                    f"{v_result['operations_verified']} operations confirmed."
+                )
+                click.echo(
+                    f"[+] Final Chain Hash: "
+                    f"{audit_log['header']['final_chain_hash']}"
+                )
             else:
                 click.echo(f"[!] INTEGRITY BREACH: {v_result['error']}")
 
