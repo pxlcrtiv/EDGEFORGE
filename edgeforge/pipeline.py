@@ -103,15 +103,12 @@ class OptimizationPipeline:
         audit.log_transformation(
             "detect_architecture",
             {"model": PathRef(model_path)},
-            {},
+            {"quantized_model": PathRef(quant_result["quantized_model_path"])},
             {"architecture_type": arch_profile.get("architecture_type")},
         )
         audit.log_transformation(
             "quantization",
-            {
-                "model": PathRef(model_path),
-                "quantized_model": PathRef(quant_result["quantized_model_path"]),
-            },
+            {"quantized_model": PathRef(quant_result["quantized_model_path"])},
             {},
             {"precision": req.precision},
         )

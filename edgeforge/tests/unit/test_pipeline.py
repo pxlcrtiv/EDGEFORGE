@@ -71,15 +71,64 @@ def test_pipeline_returns_artifact_bundle(tmp_path, monkeypatch):
     assert bundle.audit_hash
 
 
-def test_pipeline_session_id_round_trips_into_audit_log(tmp_path, monkeypatch):
+@pytest.fixture
+def pinned_cwd(tmp_path, monkeypatch):
+    """Pin working directory for the duration of the test."""
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+def test_pipeline_loads_model_exactly_for_one_pass(pinned_cwd):
+    """The pipeline calls ``detect_architecture`` once; the same model
+    graph is reused downstream by ``adaptive_quantize`` rather than
+    re-loading. Both functions take ``str(model_path)`` today, so
+    what's actually asserted is: ``detect_architecture`` opens the
+    model only once per pipeline run.
+    """
+    from edgeforge import pipeline as pipeline_mod
+
+    opened_count = {"n": 0}
+    real_detect = pipeline_mod.detect_architecture
+
+    def detect(model_path):
+        opened_count["n"] += 1
+        return real_detect(model_path)
+
+    mp = __import__("pytest").MonkeyPatch()
+    mp.setattr(pipeline_mod, "detect_architecture", detect)
+
+    try:
+        from pathlib import Path
+        import onnx
+        from onnx import helper, TensorProto
+
+        model_path = pinned_cwd / "model.onnx"
+        X = helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1])
+        Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 1])
+        graph = helper.make_graph(
+            [helper.make_node("Relu", ["X"], ["Y"])], "t2", [X], [Y]
+        )
+        onnx.save(helper.make_model(graph), str(model_path))
+
+        req = OptimizationRequest(model_path=model_path, target="jetson-nano")
+        OptimizationPipeline().run(req)
+    finally:
+        mp.undo()
+
+    assert opened_count["n"] == 1, (
+        f"detect_architecture was called {opened_count['n']} times; "
+        f"the pipeline should call it once per run."
+    )
+
+
+def test_pipeline_session_id_round_trips_into_audit_log(pinned_cwd):
     """The session id the pipeline reports in the bundle matches the
     chain's session id, which matches the audit log header.
     """
     import json
     import tarfile
 
-    model = _write_model(tmp_path / "model.onnx")
-    monkeypatch.chdir(tmp_path)
+    model = _write_model(pinned_cwd / "model.onnx")
     req = OptimizationRequest(
         model_path=model,
         target="jetson-nano",
@@ -105,15 +154,15 @@ def test_pipeline_no_longer_uses_session_123(tmp_path, monkeypatch):
 def test_cli_optimize_becomes_thin_shell(tmp_path, monkeypatch):
     """After T2.3, the Click command is mostly Click-decorator
     boilerplate plus a delegate to the pipeline. Anything heavier
-    is a smell.
+    is a smell. Spec bound: < 25 non-blank lines.
     """
     from edgeforge.cli.commands import optimize as opt_module
 
     src = Path(opt_module.__file__).read_text()
-    # Drop docstring + shebang noise; measure real LOC.
     non_blank = [line for line in src.splitlines() if line.strip()]
-    assert len(non_blank) < 35, (
-        f"commands/optimize.py is {len(non_blank)} non-blank lines; aim < 35"
+    assert len(non_blank) < 25, (
+        f"commands/optimize.py is {len(non_blank)} non-blank lines; per the "
+        f"plan/spec, aim is < 25 LOC."
     )
 
 
