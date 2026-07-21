@@ -3,7 +3,7 @@ import hashlib
 import re
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Mapping, Union
+from typing import Dict, Any, List, Mapping, Optional, Union
 
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
@@ -105,7 +105,7 @@ class AuditLogger:
         operation: str,
         inputs: Mapping[str, Union[HashableArtifact, str]],
         outputs: Mapping[str, Union[HashableArtifact, str]],
-        metadata: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """Logs a single transformation step with cryptographic chaining.
 
@@ -115,6 +115,8 @@ class AuditLogger:
         """
         if not isinstance(operation, str):
             raise TypeError("operation must be a string")
+        if metadata is None:
+            metadata = {}
         input_hashes = _resolve_mapping(inputs, "inputs")
         output_hashes = _resolve_mapping(outputs, "outputs")
 
